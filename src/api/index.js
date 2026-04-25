@@ -1,21 +1,38 @@
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
+// ─── Axios instance ───────────────────────────────────────
 export const api = axios.create({
   baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// User
-export const getUser = (telegramId) => api.get(`/users/${telegramId}`)
+// ─── Token interceptor ────────────────────────────────────
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
 
-// Cards / Boxlar
-export const getBoxStats = (userId) => api.get(`/cards/box-stats/${userId}`)
-export const getWordCount = (userId) => api.get(`/cards/count/${userId}`)
+// ─── Auth ─────────────────────────────────────────────────
+export const telegramAuth = (initData) =>
+  api.post('/api/auth/telegram', { initData })
 
-// Bo'limlar
-export const getBolimlar = (userId) => api.get(`/bolimlar/${userId}`)
+// ─── Words ────────────────────────────────────────────────
+export const getWords = () => api.get('/api/words')
+export const addWord = (data) => api.post('/api/words/add', data)
+export const updateWord = (id, data) => api.put(`/api/words/${id}`, data)
+export const deleteWord = (id) => api.delete(`/api/words/${id}`)
 
-// Leaderboard
-export const getLeaderboard = () => api.get(`/stats/leaderboard`)
+// ─── SRS ──────────────────────────────────────────────────
+export const getSrsSession = () => api.get('/api/srs/session')
+export const submitSrsAnswer = (data) => api.post('/api/srs/answer', data)
+export const getSrsProgress = () => api.get('/api/srs/progress')
+
+// ─── AI Test ──────────────────────────────────────────────
+export const getAiTestSession = () => api.get('/api/ai-test/session')
+export const submitAiAnswer = (data) => api.post('/api/ai-test/answer', data)
+export const getAiTestHistory = () => api.get('/api/ai-test/history')

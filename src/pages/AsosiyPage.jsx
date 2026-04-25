@@ -5,7 +5,6 @@ import {
   Swords, Zap, Trophy, ChevronRight, Sparkles
 } from 'lucide-react'
 
-// ── YULDUZLAR FONI ─────────────────────────────────────────
 function StarField() {
   const stars = Array.from({ length: 80 }, (_, i) => ({
     id: i,
@@ -65,7 +64,6 @@ function StarField() {
   )
 }
 
-// ── ROADMAP ─────────────────────────────────────────────────
 function Roadmap({ boxes }) {
   const positions = [
     { left: true  },
@@ -163,16 +161,17 @@ function Roadmap({ boxes }) {
   )
 }
 
-// ── ASOSIY SAHIFA ───────────────────────────────────────────
 export default function AsosiyPage() {
   const navigate = useNavigate()
   const { user, boxStats } = useStore()
+  const firstName = user?.firstName || user?.first_name || 'Siz'
+  const np = user?.np || 0
 
   const menuItems = [
-    { icon: <ShoppingBag size={22} color="#F5A623" />, label: 'SHOP',          path: '/shop'          },
-    { icon: <Languages   size={22} color="#F5A623" />, label: 'Uz Eng',        path: '/uzeng'         },
-    { icon: <FlaskConical size={22} color="#F5A623"/>, label: 'Labaratoriya', path: '/laboratoriya'  },
-    { icon: <ListTodo    size={22} color="#F5A623" />, label: 'Due list',      path: '/duelist'       },
+    { icon: <ShoppingBag size={22} color="#F5A623" />, label: 'SHOP',         path: '/shop'         },
+    { icon: <Languages   size={22} color="#F5A623" />, label: 'Uz Eng',       path: '/uzeng'        },
+    { icon: <FlaskConical size={22} color="#F5A623"/>, label: 'Labaratoriya', path: '/laboratoriya' },
+    { icon: <ListTodo    size={22} color="#F5A623" />, label: 'Due list',     path: '/duelist'      },
   ]
 
   return (
@@ -181,13 +180,11 @@ export default function AsosiyPage() {
 
       <div style={{ position: 'relative', zIndex: 1 }}>
 
-        {/* ── TOP BAR ── */}
         <div style={{
           display: 'flex', alignItems: 'center',
           justifyContent: 'space-between',
           padding: '20px 16px 12px',
         }}>
-          {/* NP Badge */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'rgba(245,166,35,0.12)',
@@ -197,13 +194,12 @@ export default function AsosiyPage() {
           }}>
             <span style={{ color: '#F5A623', fontSize: 11, fontWeight: 700 }}>NP</span>
             <Zap size={13} color="#F5A623" fill="#F5A623" />
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{user.np}</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{np}</span>
           </div>
 
-          {/* Salom + Avatar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontWeight: 600, fontSize: 15, color: '#fff' }}>
-              Salom, {user.firstName}!
+              Salom, {firstName}!
             </span>
             <div style={{
               width: 38, height: 38, borderRadius: '50%',
@@ -212,12 +208,11 @@ export default function AsosiyPage() {
               fontWeight: 800, color: '#fff', fontSize: 15,
               boxShadow: '0 0 16px rgba(245,166,35,0.5)',
             }}>
-              {user.firstName?.[0] || 'I'}
+              {firstName?.[0] || 'S'}
             </div>
           </div>
         </div>
 
-        {/* ── 4 TA MENU ── */}
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 10, padding: '0 16px', marginTop: 4,
@@ -254,7 +249,6 @@ export default function AsosiyPage() {
           ))}
         </div>
 
-        {/* ── MENING BO'LIMLARIM ── */}
         <div style={{ padding: '12px 16px 0' }}>
           <button onClick={() => navigate('/bolimlar')}
             style={{
@@ -274,7 +268,6 @@ export default function AsosiyPage() {
           </button>
         </div>
 
-        {/* ── JAMI SO'ZLAR ── */}
         <div style={{ padding: '10px 16px 0' }}>
           <button onClick={() => navigate("/jamisozlar")}
             style={{
@@ -294,7 +287,6 @@ export default function AsosiyPage() {
           </button>
         </div>
 
-        {/* ── AI BILAN JANG ── */}
         <div style={{ padding: '10px 16px 0' }}>
           <div style={{ marginBottom: 8 }}>
             <Sparkles size={18} color="#F5A623" />
@@ -336,7 +328,6 @@ export default function AsosiyPage() {
           </button>
         </div>
 
-        {/* ── ROADMAP ── */}
         <div style={{ padding: '20px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Zap size={18} color="#F5A623" fill="#F5A623" />
@@ -351,7 +342,6 @@ export default function AsosiyPage() {
           <Roadmap boxes={boxStats} />
         </div>
 
-        {/* ── PESHQADAMLAR ── */}
         <div style={{ padding: '24px 16px 0' }}>
           <button onClick={() => navigate('/peshqadam')}
             style={{
