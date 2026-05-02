@@ -6,7 +6,6 @@ import {
   BookOpen, ChevronDown, X, Volume2, Star
 } from 'lucide-react'
 
-// ── YULDUZLAR — modul darajasida (re-render muammosi yo'q) ─
 const STARS = Array.from({ length: 50 }, (_, i) => ({
   id: i,
   x: Math.random() * 100,
@@ -104,7 +103,6 @@ function SkeletonCard() {
 export default function JamiSozlarPage() {
   const navigate = useNavigate()
 
-  // ── Real state ──────────────────────────────────────────
   const [words, setWords]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
@@ -115,21 +113,26 @@ export default function JamiSozlarPage() {
   const [deletingId, setDeletingId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
 
-  // ── API: So'zlarni yuklash ───────────────────────────────
   const fetchWords = useCallback(() => {
     setLoading(true)
     setError(null)
     getWords()
       .then(res => {
-        // Backend: { words: [...] } yoki to'g'ridan array
         const raw = res.data?.words ?? res.data ?? []
-        const normalized = raw.map(w => ({
-          id:          w.id,
-          word:        w.word ?? w.english ?? w.term ?? '',
-          translation: w.translation ?? w.uzbek ?? w.meaning ?? '',
-          box:         w.box ?? w.srsBox ?? w.level ?? 1,
-          learned:     w.learned ?? w.mastered ?? (w.box >= 6) ?? false,
-        }))
+
+        // ✅ TUZATILDI: box ni srsState.box dan olamiz
+        const normalized = raw.map(w => {
+          const box = w.srsState?.box ?? w.box ?? 1
+          return {
+            id:          w.id,
+            word:        w.word ?? '',
+            translation: w.translation ?? '',
+            example:     w.example ?? '',
+            box,
+            learned:     box >= 6,
+          }
+        })
+
         setWords(normalized)
       })
       .catch(() => setError("So'zlar yuklanmadi"))
@@ -138,7 +141,6 @@ export default function JamiSozlarPage() {
 
   useEffect(() => { fetchWords() }, [fetchWords])
 
-  // ── API: O'chirish ──────────────────────────────────────
   const handleDelete = (id, e) => {
     e.stopPropagation()
     setDeletingId(id)
@@ -151,14 +153,12 @@ export default function JamiSozlarPage() {
       })
       .catch(() => {
         setDeletingId(null)
-        // Fallback: UI dan olib tashlash
         setTimeout(() => {
           setWords(ws => ws.filter(w => w.id !== id))
         }, 350)
       })
   }
 
-  // ── Ovoz ────────────────────────────────────────────────
   const handleSpeak = (word, e) => {
     e.stopPropagation()
     if ('speechSynthesis' in window) {
@@ -168,7 +168,6 @@ export default function JamiSozlarPage() {
     }
   }
 
-  // ── Filter + search + sort ───────────────────────────────
   const filtered = useMemo(() => {
     let result = [...words]
     if (search.trim()) {
@@ -378,6 +377,12 @@ export default function JamiSozlarPage() {
                           <div style={{ fontSize: 18, fontWeight: 800, color: c.text }}>{w.translation}</div>
                         </div>
                       </div>
+                      {w.example ? (
+                        <div style={{ marginBottom: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 3 }}>Misol</div>
+                          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>{w.example}</div>
+                        </div>
+                      ) : null}
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 5 }}>
                           <span>SRS Progress</span><span>Box {w.box}/6</span>
@@ -387,15 +392,11 @@ export default function JamiSozlarPage() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={e => handleSpeak(w.word, e)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.25)', borderRadius: 12, padding: '9px', cursor: 'pointer', transition: 'all 0.2s' }}
-                          onMouseDown={e => { e.stopPropagation(); e.currentTarget.style.background = 'rgba(245,166,35,0.2)' }}
-                          onMouseUp={e => e.currentTarget.style.background = 'rgba(245,166,35,0.1)'}>
+                        <button onClick={e => handleSpeak(w.word, e)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.25)', borderRadius: 12, padding: '9px', cursor: 'pointer', transition: 'all 0.2s' }}>
                           <Volume2 size={15} color="#F5A623" />
                           <span style={{ fontSize: 12, color: '#F5A623', fontWeight: 600 }}>Tinglash</span>
                         </button>
-                        <button onClick={e => handleDelete(w.id, e)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '9px', cursor: 'pointer', transition: 'all 0.2s' }}
-                          onMouseDown={e => { e.stopPropagation(); e.currentTarget.style.background = 'rgba(239,68,68,0.18)' }}
-                          onMouseUp={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}>
+                        <button onClick={e => handleDelete(w.id, e)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '9px', cursor: 'pointer', transition: 'all 0.2s' }}>
                           <Trash2 size={15} color="#ef4444" />
                           <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>O'chirish</span>
                         </button>

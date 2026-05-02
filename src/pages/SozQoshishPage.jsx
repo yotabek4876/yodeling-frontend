@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
+import { addWord } from '../api/index'
 import { ArrowLeft, Plus, Zap, Sparkles } from 'lucide-react'
 
 function StarField() {
@@ -61,28 +62,47 @@ function StarField() {
 
 export default function SozQoshishPage() {
   const navigate = useNavigate()
-  const { user } = useStore()
+  // ✅ fetchWords va fetchProgress ni store dan olamiz
+  const { fetchWords, fetchProgress } = useStore()
 
   const [word, setWord] = useState('')
   const [translation, setTranslation] = useState('')
   const [example, setExample] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState(null)
   const [focused, setFocused] = useState(null)
 
   const handleSubmit = async () => {
     if (!word.trim() || !translation.trim()) return
     setLoading(true)
-    // Backend ga yuborish (hozircha mock)
-    await new Promise(r => setTimeout(r, 800))
-    setLoading(false)
-    setSuccess(true)
-    setTimeout(() => {
-      setSuccess(false)
-      setWord('')
-      setTranslation('')
-      setExample('')
-    }, 1800)
+    setError(null)
+
+    try {
+      // ✅ Haqiqiy backend ga yuboramiz
+      await addWord({
+        word: word.trim(),
+        translation: translation.trim(),
+        example: example.trim() || undefined,
+      })
+
+      // ✅ Store ni yangilaymiz — AsosiyPage va JamiSozlarPage avtomatik yangilanadi
+      await fetchWords()
+      await fetchProgress()
+
+      setSuccess(true)
+      setTimeout(() => {
+        setSuccess(false)
+        setWord('')
+        setTranslation('')
+        setExample('')
+      }, 1800)
+    } catch (err) {
+      console.error('So\'z qo\'shishda xatolik:', err)
+      setError(err?.response?.data?.message || 'Xatolik yuz berdi, qayta urinib ko\'ring')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const inputStyle = (name) => ({
@@ -133,6 +153,22 @@ export default function SozQoshishPage() {
           </div>
         </div>
 
+        {/* ── ERROR ── */}
+        {error && (
+          <div style={{
+            margin: '0 16px 12px',
+            padding: '12px 16px',
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 14,
+            fontSize: 13,
+            color: '#fca5a5',
+            textAlign: 'center',
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
+
         {/* ── FORM ── */}
         <div style={{ padding: '8px 16px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -155,7 +191,6 @@ export default function SozQoshishPage() {
                 onBlur={() => setFocused(null)}
                 style={inputStyle('word')}
               />
-              {/* Sparkle icon right */}
               <div style={{
                 position: 'absolute', right: 14, top: '50%',
                 transform: 'translateY(-50%)',
@@ -217,7 +252,7 @@ export default function SozQoshishPage() {
               disabled={!word.trim() || !translation.trim() || loading}
               style={{
                 width: '100%', padding: '16px',
-                borderRadius: 18, cursor: (!word.trim() || !translation.trim()) ? 'not-allowed' : 'pointer',
+                borderRadius: 18, cursor: (!word.trim() || !translation.trim() || loading) ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 fontWeight: 700, fontSize: 16,
                 transition: 'all 0.2s',
