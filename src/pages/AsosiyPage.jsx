@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
 import {
@@ -78,7 +79,7 @@ function Roadmap({ boxes }) {
   const gap = 50
   const totalH = boxes.length * boxH + (boxes.length - 1) * gap + 40
 
-  const getCX = (i) => positions[i].left ? 80 : 260
+  const getCX = (i) => positions[i % positions.length].left ? 80 : 260
   const getCY = (i) => 20 + i * (boxH + gap) + boxH / 2
 
   let pathD = ''
@@ -112,7 +113,7 @@ function Roadmap({ boxes }) {
 
       {boxes.map((b, i) => {
         const isFirst = i === 0
-        const isLeft = positions[i].left
+        const isLeft = positions[i % positions.length].left
         const top = 20 + i * (boxH + gap)
 
         return (
@@ -138,13 +139,14 @@ function Roadmap({ boxes }) {
             cursor: 'pointer',
             transition: 'transform 0.2s',
           }}>
+            {/* So'z soni ko'rsatiladi (percent emas) */}
             <div style={{
               fontSize: 26, fontWeight: 800,
               color: isFirst ? '#fff' : 'rgba(255,255,255,0.5)',
               letterSpacing: '-0.5px',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
-              {b.percent}%
+              {b.total}
               {isFirst && <Zap size={14} color="#fff" fill="#fff" />}
             </div>
             <div style={{
@@ -152,7 +154,7 @@ function Roadmap({ boxes }) {
               color: isFirst ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)',
               fontWeight: 500,
             }}>
-              Box {b.box} jami
+              Box {b.box} • {b.percent}%
             </div>
           </div>
         )
@@ -163,9 +165,15 @@ function Roadmap({ boxes }) {
 
 export default function AsosiyPage() {
   const navigate = useNavigate()
-  const { user, boxStats } = useStore()
+  // ✅ fetchProgress ni ham olamiz
+  const { user, boxStats, fetchProgress } = useStore()
   const firstName = user?.firstName || user?.first_name || 'Siz'
   const np = user?.np || 0
+
+  // ✅ Sahifaga har kelganda progress yangilanadi
+  useEffect(() => {
+    fetchProgress()
+  }, [fetchProgress])
 
   const menuItems = [
     { icon: <ShoppingBag size={22} color="#F5A623" />, label: 'SHOP',         path: '/shop'         },
@@ -180,6 +188,7 @@ export default function AsosiyPage() {
 
       <div style={{ position: 'relative', zIndex: 1 }}>
 
+        {/* HEADER */}
         <div style={{
           display: 'flex', alignItems: 'center',
           justifyContent: 'space-between',
@@ -213,6 +222,7 @@ export default function AsosiyPage() {
           </div>
         </div>
 
+        {/* MENU */}
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 10, padding: '0 16px', marginTop: 4,
@@ -249,6 +259,7 @@ export default function AsosiyPage() {
           ))}
         </div>
 
+        {/* BO'LIMLAR */}
         <div style={{ padding: '12px 16px 0' }}>
           <button onClick={() => navigate('/bolimlar')}
             style={{
@@ -268,8 +279,9 @@ export default function AsosiyPage() {
           </button>
         </div>
 
+        {/* JAMI SO'ZLAR */}
         <div style={{ padding: '10px 16px 0' }}>
-          <button onClick={() => navigate("/jamisozlar")}
+          <button onClick={() => navigate('/jamisozlar')}
             style={{
               width: '100%', display: 'flex', alignItems: 'center',
               justifyContent: 'space-between',
@@ -287,6 +299,7 @@ export default function AsosiyPage() {
           </button>
         </div>
 
+        {/* JANG */}
         <div style={{ padding: '10px 16px 0' }}>
           <div style={{ marginBottom: 8 }}>
             <Sparkles size={18} color="#F5A623" />
@@ -328,6 +341,7 @@ export default function AsosiyPage() {
           </button>
         </div>
 
+        {/* ROADMAP */}
         <div style={{ padding: '20px 16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Zap size={18} color="#F5A623" fill="#F5A623" />
@@ -342,6 +356,7 @@ export default function AsosiyPage() {
           <Roadmap boxes={boxStats} />
         </div>
 
+        {/* PESHQADAMLAR */}
         <div style={{ padding: '24px 16px 0' }}>
           <button onClick={() => navigate('/peshqadam')}
             style={{
