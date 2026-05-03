@@ -8,6 +8,7 @@ const useStore = create((set, get) => ({
   isAuthenticated: false,
   srsProgress: null,
   words: [],
+  leaderboard: [],                         // ✅ peshqadamlar uchun
   boxStats: [
     { box: 1, percent: 0, total: 0 },
     { box: 2, percent: 0, total: 0 },
@@ -52,7 +53,15 @@ const useStore = create((set, get) => ({
           ? Math.round(((boxDistribution[box] || 0) / totalWords) * 100)
           : 0,
       }))
-      set({ srsProgress: progress, boxStats, wordCount: totalWords })
+      // ✅ npBalance ni user ichiga ham yangilaymiz
+      set(state => ({
+        srsProgress: progress,
+        boxStats,
+        wordCount: totalWords,
+        user: state.user
+          ? { ...state.user, npBalance: progress.npBalance ?? state.user.npBalance ?? 0 }
+          : state.user,
+      }))
     } catch (error) {
       console.error('Progress error:', error)
     }
@@ -68,6 +77,7 @@ const useStore = create((set, get) => ({
     }
   },
 
+  setLeaderboard: (leaderboard) => set({ leaderboard }),  // ✅
   setUser: (user) => set({ user }),
   setWords: (words) => set({ words }),
   setWordCount: (wordCount) => set({ wordCount }),

@@ -168,7 +168,7 @@ export default function AsosiyPage() {
   // ✅ fetchProgress ni ham olamiz
   const { user, boxStats, fetchProgress } = useStore()
   const firstName = user?.firstName || user?.first_name || 'Siz'
-  const np = user?.np || 0
+  const np = user?.npBalance ?? 0
 
   // ✅ Sahifaga har kelganda progress yangilanadi
   useEffect(() => {
