@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useStore from '../store/useStore'
 import { getSrsSession, submitSrsAnswer } from '../api/index'
 import { ArrowLeft, Zap, Volume2, Check, X } from 'lucide-react'
 
-// ── YULDUZLAR — modul darajasida ──────────────────────────
 const STARS = Array.from({ length: 50 }, (_, i) => ({
   id: i,
   x: Math.random() * 100,
@@ -70,20 +70,19 @@ function StarField() {
 
 export default function DueListPage() {
   const navigate = useNavigate()
+  const { fetchProgress } = useStore() // ← fetchProgress qo'shildi
 
-  // ── State ──────────────────────────────────────────────
-  const [words, setWords]           = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
+  const [words, setWords]               = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [answer, setAnswer]         = useState('')
-  const [focused, setFocused]       = useState(false)
-  const [result, setResult]         = useState(null)
-  const [finished, setFinished]     = useState(false)
-  const [score, setScore]           = useState(0)
-  const [npEarned, setNpEarned]     = useState(0)
+  const [answer, setAnswer]             = useState('')
+  const [focused, setFocused]           = useState(false)
+  const [result, setResult]             = useState(null)
+  const [finished, setFinished]         = useState(false)
+  const [score, setScore]               = useState(0)
+  const [npEarned, setNpEarned]         = useState(0)
 
-  // ── API: SRS sessiyasini yuklash ────────────────────────
   const fetchSession = useCallback(() => {
     setLoading(true)
     setError(null)
@@ -95,7 +94,6 @@ export default function DueListPage() {
 
     getSrsSession()
       .then(res => {
-        // Backend: { words: [...] } yoki { cards: [...] } yoki array
         const raw = res.data?.words ?? res.data?.cards ?? res.data ?? []
         if (!raw.length) {
           setError("Bugun takrorlash uchun so'z yo'q")
@@ -118,7 +116,6 @@ export default function DueListPage() {
 
   const current = words[currentIndex]
 
-  // ── Ovoz ────────────────────────────────────────────────
   const handleSpeak = () => {
     if (!current) return
     if ('speechSynthesis' in window) {
@@ -128,19 +125,17 @@ export default function DueListPage() {
     }
   }
 
-  // ── Tekshirish ──────────────────────────────────────────
   const handleCheck = () => {
     if (!answer.trim() || !current) return
     const isCorrect = answer.trim().toLowerCase() === current.translation.toLowerCase()
     setResult(isCorrect ? 'correct' : 'wrong')
     if (isCorrect) setScore(s => s + 1)
 
-    // Backend ga javob yuborish
     submitSrsAnswer({
-      wordId:    current.id,
+      wordId:     current.id,
       isCorrect,
       userAnswer: answer.trim(),
-    }).catch(() => {}) // Xato bo'lsa UI ga ta'sir etmasin
+    }).catch(() => {})
 
     setTimeout(() => {
       setResult(null)
@@ -149,13 +144,13 @@ export default function DueListPage() {
         const finalScore = score + (isCorrect ? 1 : 0)
         setNpEarned(finalScore)
         setFinished(true)
+        fetchProgress() // ← NP yangilash
       } else {
         setCurrentIndex(i => i + 1)
       }
     }, 1000)
   }
 
-  // ── O'tkazib yuborish ────────────────────────────────────
   const handleSkip = () => {
     submitSrsAnswer({ wordId: current?.id, isCorrect: false, userAnswer: '' }).catch(() => {})
     setAnswer('')
@@ -163,12 +158,12 @@ export default function DueListPage() {
     if (currentIndex + 1 >= words.length) {
       setNpEarned(score)
       setFinished(true)
+      fetchProgress() // ← NP yangilash
     } else {
       setCurrentIndex(i => i + 1)
     }
   }
 
-  // ── Qayta boshlash ───────────────────────────────────────
   const handleRestart = () => { fetchSession() }
 
   // ── LOADING ─────────────────────────────────────────────
@@ -392,7 +387,6 @@ export default function DueListPage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   )
