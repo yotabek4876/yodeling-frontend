@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import { useEffect } from 'react'
 import BottomNav from './components/BottomNav'
 import AsosiyPage from './pages/AsosiyPage'
@@ -33,7 +33,7 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-screen bg-[#1a1a1a] pb-20">
         <Routes>
           <Route path="/" element={<AsosiyPage />} />
@@ -53,6 +53,6 @@ export default function App() {
         </Routes>
         <BottomNav />
       </div>
-    </BrowserRouter>
+    </HashRouter>
   )
 }

@@ -52,7 +52,12 @@ function Cube3D({ currentBox = 1 }) {
     const onUp=()=>{ if(!s.dragging)return; s.dragging=false; el.style.transition='transform 0.5s'; s.autoTimer=setTimeout(startAuto,3000) }
     const md=e=>onDown(e.clientX,e.clientY), mm=e=>onMove(e.clientX,e.clientY)
     const ts=e=>onDown(e.touches[0].clientX,e.touches[0].clientY)
-    const tm=e=>{ e.preventDefault(); onMove(e.touches[0].clientX,e.touches[0].clientY) }
+    const tm=e=>{
+      // Sahifa scrollini faqat cube drag paytida bloklaymiz.
+      if (!s.dragging) return
+      e.preventDefault()
+      onMove(e.touches[0].clientX,e.touches[0].clientY)
+    }
     el.addEventListener('mousedown',md); el.addEventListener('touchstart',ts,{passive:true})
     document.addEventListener('mousemove',mm); document.addEventListener('mouseup',onUp)
     document.addEventListener('touchmove',tm,{passive:false}); document.addEventListener('touchend',onUp)
@@ -184,7 +189,7 @@ function ElecBoxes({ boxStats }) {
 export default function BolimlarPage() {
   const navigate = useNavigate()
   const { user, boxStats, wordCount } = useStore()
-  const np = user?.np || 0
+  const np = user?.npBalance ?? user?.np ?? 0
   const activeBox = (boxStats?.findIndex(b => (b.percent ?? 0) < 100) + 1) || 1
 
   useEffect(() => {
@@ -200,7 +205,7 @@ export default function BolimlarPage() {
   const headerBtn = { width:38, height:38, borderRadius:12, background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.11)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all .2s' }
 
   return (
-    <div style={{ position:'relative', minHeight:'100vh', paddingBottom:110, color:'#fff', overflow:'hidden' }}>
+    <div style={{ position:'relative', minHeight:'100vh', paddingBottom:110, color:'#fff', overflowX:'hidden' }}>
       <StarField/>
       <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% -10%, rgba(124,58,237,0.1) 0%, transparent 60%), radial-gradient(circle at 10% 80%, rgba(245,166,35,0.06) 0%, transparent 50%)', pointerEvents:'none' }} />
 

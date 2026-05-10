@@ -190,11 +190,6 @@ export default function GuruhliJangPage() {
     setPhase('searching')
     setTeamCount(1)
 
-    // Simulate players joining
-    const names = ['Alibek', 'Jasur', 'Dilnoza', 'Sardor', 'Malika', 'Bobur', 'Zulfiya', 'Otabek']
-    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5)
-    const picked = shuffle(names).slice(0, 3)
-
     // Progressively show players joining
     let count = 1
     const joinInterval = setInterval(() => {
@@ -202,11 +197,9 @@ export default function GuruhliJangPage() {
       setTeamCount(count)
       if (count >= 4) {
         clearInterval(joinInterval)
-        const myTeammate = picked[0]
-        const enemy1 = picked[1]
-        const enemy2 = picked[2]
-        setTeammates([{ name: myTeammate }])
-        setEnemies([{ name: enemy1 }, { name: enemy2 }])
+        // Hozircha AI team mode: real multiplayer yo'q.
+        setTeammates([{ name: 'AI Ally' }])
+        setEnemies([{ name: 'AI Enemy 1' }, { name: 'AI Enemy 2' }])
         setTimeout(() => {
           setPhase('found')
           setTimeout(() => startBattle(), 2200)
@@ -282,16 +275,22 @@ export default function GuruhliJangPage() {
       })
       const data = await res.json()
 
-      // Simulate teammate & enemy scores
-      const teammateScore = Math.floor(Math.random() * questions.length * 0.6) + 2
-      const enemy1Score   = Math.floor(Math.random() * questions.length * 0.5) + 2
-      const enemy2Score   = Math.floor(Math.random() * questions.length * 0.5) + 2
+      // Backend natijasiga yaqinlashtirilgan jamoaviy hisob:
+      // - teammate sizning natijangizga proporsional
+      // - enemy taraf AI score asosida quriladi
+      const totalQ = questions.length || 10
+      const aiScorePercent = data?.aiScore ?? 50
+      const enemyExpected = Math.round((aiScorePercent / 100) * totalQ)
+
+      const teammateScore = Math.max(1, Math.min(totalQ, Math.round(finalScore * 0.8)))
+      const enemy1Score   = Math.max(1, Math.round(enemyExpected * 0.9))
+      const enemy2Score   = Math.max(1, Math.round(enemyExpected * 1.1))
       const myTeamScore   = finalScore + teammateScore
       const enemyTeamScore = enemy1Score + enemy2Score
 
       setResult({
         myScore: finalScore,
-        totalQuestions: questions.length,
+        totalQuestions: totalQ,
         myTeamScore,
         enemyTeamScore,
         npEarned: myTeamScore > enemyTeamScore ? (data.npEarned ?? 10) + 5 : (data.npEarned ?? 3),
@@ -328,7 +327,7 @@ export default function GuruhliJangPage() {
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 6 }}>2 vs 2 Guruhli Jang</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24, textAlign: 'center', lineHeight: 1.6 }}>
-            Random jamoadosh bilan birgalikda<br />raqib jamoaga qarshi jang!
+            AI jamoadosh bilan test rejimida<br />AI jamoaga qarshi jang!
           </div>
 
           {/* Info kartalar */}

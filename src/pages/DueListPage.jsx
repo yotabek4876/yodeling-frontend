@@ -82,6 +82,7 @@ export default function DueListPage() {
   const [finished, setFinished]         = useState(false)
   const [score, setScore]               = useState(0)
   const [npEarned, setNpEarned]         = useState(0)
+  const [questionStartedAt, setQuestionStartedAt] = useState(Date.now())
 
   const fetchSession = useCallback(() => {
     setLoading(true)
@@ -91,6 +92,7 @@ export default function DueListPage() {
     setScore(0)
     setAnswer('')
     setResult(null)
+    setQuestionStartedAt(Date.now())
 
     getSrsSession()
       .then(res => {
@@ -107,6 +109,7 @@ export default function DueListPage() {
           box:         w.box ?? w.srsBox ?? 1,
         }))
         setWords(normalized)
+        setQuestionStartedAt(Date.now())
       })
       .catch(() => setError("Due list yuklanmadi"))
       .finally(() => setLoading(false))
@@ -135,6 +138,7 @@ export default function DueListPage() {
       wordId:     current.id,
       isCorrect,
       userAnswer: answer.trim(),
+      responseMs: Math.max(0, Date.now() - questionStartedAt),
     }).catch(() => {})
 
     setTimeout(() => {
@@ -147,12 +151,18 @@ export default function DueListPage() {
         fetchProgress() // ← NP yangilash
       } else {
         setCurrentIndex(i => i + 1)
+        setQuestionStartedAt(Date.now())
       }
     }, 1000)
   }
 
   const handleSkip = () => {
-    submitSrsAnswer({ wordId: current?.id, isCorrect: false, userAnswer: '' }).catch(() => {})
+    submitSrsAnswer({
+      wordId: current?.id,
+      isCorrect: false,
+      userAnswer: '',
+      responseMs: Math.max(0, Date.now() - questionStartedAt),
+    }).catch(() => {})
     setAnswer('')
     setResult(null)
     if (currentIndex + 1 >= words.length) {
@@ -161,6 +171,7 @@ export default function DueListPage() {
       fetchProgress() // ← NP yangilash
     } else {
       setCurrentIndex(i => i + 1)
+      setQuestionStartedAt(Date.now())
     }
   }
 

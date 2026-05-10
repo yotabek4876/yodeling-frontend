@@ -114,7 +114,7 @@ export default function DuelPage() {
   const [selected, setSelected] = useState(null)
   const [timeLeft, setTimeLeft] = useState(15)
   const [result, setResult] = useState(null)
-  const [opponentName, setOpponentName] = useState('Raqib')
+  const [opponentName, setOpponentName] = useState('AI Rival')
   const timerRef = useState(null)
 
   useEffect(() => {
@@ -127,10 +127,9 @@ export default function DuelPage() {
   const startSearch = () => {
     setSearching(true)
     setPhase('searching')
-    // Real websocket o'rniga hozircha simulation
+    // Hozircha AI sparring mode (real PvP emas)
     setTimeout(() => {
-      const names = ['Alibek', 'Jasur', 'Dilnoza', 'Sardor', 'Malika', 'Bobur']
-      setOpponentName(names[Math.floor(Math.random() * names.length)])
+      setOpponentName('AI Rival')
       setPhase('found')
       setTimeout(() => startDuel(), 2000)
     }, 3000 + Math.random() * 3000)
@@ -187,8 +186,14 @@ export default function DuelPage() {
         body: JSON.stringify({ answers: finalAnswers })
       })
       const data = await res.json()
-      const opponentScore = Math.floor(Math.random() * 40) + 30
-      setResult({ ...data, opponentScore, opponentName, npEarned: data.userScore > opponentScore ? data.npEarned + 5 : data.npEarned })
+      const opponentScore = data?.aiScore ?? 0
+      const duelBonus = data?.userScore > opponentScore ? 5 : 0
+      setResult({
+        ...data,
+        opponentScore,
+        opponentName,
+        npEarned: (data?.npEarned ?? 0) + duelBonus,
+      })
       setPhase('result')
     } catch { setPhase('intro') }
   }
@@ -211,7 +216,7 @@ export default function DuelPage() {
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>1 vs 1 Duel</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 32, textAlign: 'center' }}>
-              Real foydalanuvchi bilan duel!<br />10 ta savol • Kim ko'p to'g'ri javob bersa g'alaba
+              AI sparring duel (test mode)<br />10 ta savol • Kim ko'p to'g'ri javob bersa g'alaba
             </div>
 
             <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 24 }}>

@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
-import { api, getWords } from '../api/index'
+import { api } from '../api/index'
 import { Zap, Swords, Trophy, XCircle, Star, Flame, Target, User } from 'lucide-react'
 
 // ── YULDUZLAR: useMemo bilan bir marta yaratiladi ──────────
@@ -137,56 +136,31 @@ export default function AkkauntPage() {
     }))
   , [])
 
-  // ── API: Jang tarixi ──
+  // ── API: Profil statistikasi (source of truth) ──
   useEffect(() => {
     setLoadingStats(true)
-    api.get('/api/ai-test/history')
+    api.get('/api/stats/my')
       .then(res => {
-        const history = res.data?.history ?? res.data ?? []
-        const total  = history.length
-        const wins   = history.filter(h => h.result === 'win'  || h.isWin === true).length
-        const losses = history.filter(h => h.result === 'loss' || h.isWin === false).length
-
-        // Streak hisoblash
-        const dates = history
-          .map(h => new Date(h.createdAt ?? h.date).toDateString())
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .sort((a, b) => new Date(b) - new Date(a))
-
-        let streakCount = 0
-        const today = new Date()
-        for (let i = 0; i < dates.length; i++) {
-          const diff = Math.round((today - new Date(dates[i])) / (1000 * 60 * 60 * 24))
-          if (diff === i) streakCount++
-          else break
-        }
-
-        setBattleStats({ total, wins, losses })
-        setStreak(streakCount)
+        const stats = res.data ?? {}
+        setBattleStats({
+          total: stats.battles ?? 0,
+          wins: stats.wins ?? 0,
+          losses: stats.losses ?? 0,
+        })
+        setStreak(stats.streak ?? 0)
+        setTotalWords(stats.totalWords ?? 0)
+        setMasteredWords(stats.masteredWords ?? 0)
       })
       .catch(() => {})
       .finally(() => setLoadingStats(false))
   }, [])
 
-  // ── API: So'zlar + mastered ──
   useEffect(() => {
-    setLoadingWords(true)
-    getWords()
-      .then(res => {
-        const words = res.data?.words ?? res.data ?? []
-        const count = res.data?.total ?? (Array.isArray(words) ? words.length : 0)
-        const mastered = Array.isArray(words)
-          ? words.filter(w => w.box >= 6 || w.mastered === true).length
-          : (res.data?.masteredCount ?? 0)
-        setTotalWords(count)
-        setMasteredWords(mastered)
-      })
-      .catch(() => {})
-      .finally(() => setLoadingWords(false))
-  }, [])
+    setLoadingWords(loadingStats)
+  }, [loadingStats])
 
   const firstName = user?.firstName ?? user?.first_name ?? 'Ism'
-  const np        = user?.np ?? 0
+  const np        = user?.npBalance ?? user?.np ?? 0
   const isLoading = loadingStats || loadingWords
 
   // ── Stats ──

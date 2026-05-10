@@ -117,7 +117,9 @@ export default function PeshqadamlarPage() {
           id:       item.id    ?? i + 1,
           rank:     item.rank  ?? i + 1,
           name:     [item.firstName, item.lastName].filter(Boolean).join(' ') || item.name || 'Foydalanuvchi',
-          score:    item.score ?? item.np ?? item.wordCount ?? 0,
+          score:    item.score ?? 0,
+          np:       item.np ?? 0,
+          wordCount:item.wordCount ?? 0,
           avatarBg: AVATAR_COLORS[i % AVATAR_COLORS.length],
         }))
         setLeaderboard(normalized)
@@ -127,7 +129,7 @@ export default function PeshqadamlarPage() {
   }, [])
 
   const firstName = user?.firstName ?? user?.first_name ?? 'Siz'
-  const np        = user?.np ?? 0
+  const np        = user?.npBalance ?? user?.np ?? 0
   const userRank  = useMemo(() =>
     leaderboard?.findIndex(l => l.id === user?.id) + 1 || '—'
   , [leaderboard, user])
@@ -210,7 +212,7 @@ export default function PeshqadamlarPage() {
               background: 'linear-gradient(90deg, #fff 0%, #F5A623 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
-              Jami so'zlar
+              NP reytingi
             </span>
           </div>
 
@@ -271,6 +273,10 @@ export default function PeshqadamlarPage() {
                       <span style={{ fontWeight: 700, fontSize: 14, color: item.rank === 1 ? '#F5A623' : '#22c55e' }}>
                         {item.score.toLocaleString()}
                       </span>
+                    </div>
+                    <div style={{ minWidth: 62, textAlign: 'right', fontSize: 10, color: 'rgba(255,255,255,0.45)', lineHeight: 1.2 }}>
+                      <div>{item.np} NP</div>
+                      <div>{item.wordCount} so'z</div>
                     </div>
                   </div>
                 )
