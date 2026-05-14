@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
+import { api } from '../api/index'
 import { ArrowLeft, Zap, Users, Clock, Trophy, Shield } from 'lucide-react'
 
 const GLOBAL_CSS = `
@@ -115,7 +116,9 @@ export default function DuelPage() {
   const [timeLeft, setTimeLeft] = useState(15)
   const [result, setResult] = useState(null)
   const [opponentName, setOpponentName] = useState('AI Rival')
+  const [matchMode, setMatchMode] = useState('ai')
   const timerRef = useState(null)
+  const foundStartedRef = useRef(false)
 
   useEffect(() => {
     const id = 'duel-css'
@@ -124,25 +127,96 @@ export default function DuelPage() {
     }
   }, [])
 
-  const startSearch = () => {
-    setSearching(true)
-    setPhase('searching')
-    // Hozircha AI sparring mode (real PvP emas)
-    setTimeout(() => {
-      setOpponentName('AI Rival')
-      setPhase('found')
-      setTimeout(() => startDuel(), 2000)
-    }, 3000 + Math.random() * 3000)
+  const cancelSearch = async () => {
+    try {
+      await api.delete('/api/pvp/queue')
+    } catch (_) {
+      /* ignore */
+    }
+    setSearching(false)
+    setPhase('intro')
   }
 
-  const startDuel = async () => {
+  const startSearch = async () => {
+    setSearching(true)
+    setPhase('searching')
+    setMatchMode('ai')
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ai-test/session`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      })
-      const data = await res.json()
-      if (data.error) { alert(data.error); setPhase('intro'); return }
-      setQuestions(data.questions)
+      await api.post('/api/pvp/queue', { mode: 'DUEL' })
+      const deadline = Date.now() + 88_000
+      while (Date.now() < deadline) {
+        const { data } = await api.get('/api/pvp/status')
+        if (data.state === 'ready') {
+          const opp = (data.members || []).find((m) => !m.isMe)
+          setOpponentName(opp?.displayName || 'Raqib')
+          setMatchMode('human')
+          setPhase('found')
+          return
+        }
+        if (data.state === 'idle') break
+        await new Promise((r) => setTimeout(r, 2000))
+      }
+      try {
+        await api.delete('/api/pvp/queue')
+      } catch (_) {
+        /* ignore */
+      }
+      setSearching(false)
+      setPhase('no_match')
+    } catch (_) {
+      try {
+        await api.delete('/api/pvp/queue')
+      } catch (__) {
+        /* ignore */
+      }
+      setPhase('intro')
+      setSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    if (phase !== 'found') {
+      foundStartedRef.current = false
+      return
+    }
+    if (matchMode !== 'human') return
+    if (foundStartedRef.current) return
+    foundStartedRef.current = true
+    const t = setTimeout(async () => {
+      try {
+        await api.post('/api/pvp/ack-ready')
+      } catch (_) {
+        /* ignore */
+      }
+      startDuel('human')
+    }, 1600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, matchMode])
+
+  const startDuel = async (modeArg) => {
+    const mode = modeArg || matchMode
+    try {
+      if (mode === 'human') {
+        const { data } = await api.get('/api/pvp/game')
+        if (data.error) {
+          alert(data.error)
+          setPhase('intro')
+          return
+        }
+        setQuestions(data.questions || [])
+      } else {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ai-test/session`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        })
+        const data = await res.json()
+        if (data.error) {
+          alert(data.error)
+          setPhase('intro')
+          return
+        }
+        setQuestions(data.questions)
+      }
       setAnswers([])
       setCurrentQ(0)
       setSelected(null)
@@ -153,12 +227,83 @@ export default function DuelPage() {
     }
   }
 
+  const submitDuel = async (finalAnswers) => {
+    try {
+      if (matchMode === 'human') {
+        const { data: r1 } = await api.post('/api/pvp/submit', { answers: finalAnswers })
+        if (r1.error) {
+          alert(r1.error)
+          setPhase('intro')
+          return
+        }
+        if (r1.phase === 'waiting') {
+          for (let i = 0; i < 90; i++) {
+            await new Promise((r) => setTimeout(r, 2000))
+            const { data: st } = await api.get('/api/pvp/status')
+            if (st.state === 'done' && st.result) {
+              const raw = st.result
+              const players = raw.players || []
+              const meRow = players.find((p) => p.userId === user?.id)
+              const oppRow = players.find((p) => p.userId !== user?.id)
+              setResult({
+                userScore: meRow?.score ?? r1.meScore ?? 0,
+                opponentScore: oppRow?.score ?? 0,
+                opponentName: oppRow?.displayName || opponentName,
+                npEarned: raw.npByUserId?.[user?.id] ?? 0,
+                aiScore: oppRow?.score ?? 0,
+              })
+              setPhase('result')
+              return
+            }
+          }
+          setPhase('intro')
+          return
+        }
+        if (r1.phase === 'done') {
+          setResult({
+            userScore: r1.userScore,
+            opponentScore: r1.opponentScore,
+            opponentName: r1.opponentName,
+            npEarned: r1.npEarned ?? 0,
+            aiScore: r1.opponentScore,
+          })
+          setPhase('result')
+          return
+        }
+        setPhase('intro')
+        return
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ai-test/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ answers: finalAnswers }),
+      })
+      const data = await res.json()
+      const opponentScore = data?.aiScore ?? 0
+      const duelBonus = data?.userScore > opponentScore ? 5 : 0
+      setResult({
+        ...data,
+        opponentScore,
+        opponentName,
+        npEarned: (data?.npEarned ?? 0) + duelBonus,
+      })
+      setPhase('result')
+    } catch {
+      setPhase('intro')
+    }
+  }
+
   const startTimer = () => {
     setTimeLeft(15)
     clearInterval(timerRef[0])
     timerRef[0] = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) { clearInterval(timerRef[0]); handleAnswer(-1); return 0 }
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef[0])
+          handleAnswer(-1)
+          return 0
+        }
         return prev - 1
       })
     }, 1000)
@@ -176,26 +321,6 @@ export default function DuelPage() {
     } else {
       setTimeout(() => { setCurrentQ(p => p + 1); setSelected(null); startTimer() }, 1000)
     }
-  }
-
-  const submitDuel = async (finalAnswers) => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/ai-test/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ answers: finalAnswers })
-      })
-      const data = await res.json()
-      const opponentScore = data?.aiScore ?? 0
-      const duelBonus = data?.userScore > opponentScore ? 5 : 0
-      setResult({
-        ...data,
-        opponentScore,
-        opponentName,
-        npEarned: (data?.npEarned ?? 0) + duelBonus,
-      })
-      setPhase('result')
-    } catch { setPhase('intro') }
   }
 
   if (phase === 'intro') {
@@ -216,7 +341,8 @@ export default function DuelPage() {
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>1 vs 1 Duel</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 32, textAlign: 'center' }}>
-              AI sparring duel (test mode)<br />10 ta savol • Kim ko'p to'g'ri javob bersa g'alaba
+              Avval Telegram orqali <b>jonli raqib</b> qidiriladi (2 ta haqiqiy foydalanuvchi).<br />
+              Vaqt tugasa jonli duel <b>ochilmaydi</b> — xohlasangiz keyin <b>AI mashq</b>ni alohida tanlaysiz (bu jonli duel emas).
             </div>
 
             <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 24 }}>
@@ -247,12 +373,63 @@ export default function DuelPage() {
         <StarField />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 16px 12px' }}>
-            <button onClick={() => { setPhase('intro'); setSearching(false) }} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <button onClick={cancelSearch} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <ArrowLeft size={18} color="#fff" />
             </button>
             <span style={{ fontWeight: 700, fontSize: 17, color: '#fff' }}>Raqib qidirilmoqda</span>
           </div>
-          <SearchingScreen onCancel={() => setPhase('intro')} />
+          <SearchingScreen onCancel={cancelSearch} />
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'no_match') {
+    return (
+      <div style={{ position: 'relative', minHeight: '100vh' }}>
+        <StarField />
+        <div style={{ position: 'relative', zIndex: 1, padding: '24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <button onClick={() => { setPhase('intro'); setSearching(false) }} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ArrowLeft size={18} color="#fff" />
+            </button>
+            <span style={{ fontWeight: 700, fontSize: 17, color: '#fff' }}>Raqib topilmadi</span>
+          </div>
+          <div style={{ textAlign: 'center', padding: '12px 0 28px' }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>🤝</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#fff', marginBottom: 10 }}>Hozircha jonli raqib yo‘q</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.55, marginBottom: 28 }}>
+              Boshqa foydalanuvchilar hali qo‘shmagan. Bu <b>yolg‘on duel emas</b> — shunchaki navbat bo‘sh.<br />
+              AI bilan mashq alohida rejim: ball va raqib <b>simulyatsiya</b>.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => { setPhase('searching'); void startSearch() }}
+                style={{ width: '100%', padding: '14px', borderRadius: 16, background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}
+              >
+                Qayta qidirish
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMatchMode('ai')
+                  setOpponentName('AI · mashq')
+                  void startDuel('ai')
+                }}
+                style={{ width: '100%', padding: '14px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                AI bilan mashq (jonli emas)
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/jang/ai')}
+                style={{ width: '100%', padding: '12px', borderRadius: 14, background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.45)', fontSize: 13, cursor: 'pointer' }}
+              >
+                To‘liq AI jang sahifasiga o‘tish →
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -266,7 +443,9 @@ export default function DuelPage() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚔️</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8 }}>Raqib topildi!</div>
           <div style={{ fontSize: 16, color: '#a78bfa', fontWeight: 700 }}>{opponentName}</div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>Jang boshlanmoqda...</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
+            Jonli duel — savollar bir xil, raqib haqiqiy foydalanuvchi
+          </div>
         </div>
       </div>
     )

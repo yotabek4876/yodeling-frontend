@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
+import { api } from '../api/index'
 import { ArrowLeft, Zap, Users, Clock, Trophy, Shield, Crown } from 'lucide-react'
 
 // ── Animatsiyalar ──────────────────────────────────────────
@@ -164,7 +165,8 @@ export default function GuruhliJangPage() {
   const { user } = useStore()
 
   const [phase, setPhase] = useState('intro') // intro | searching | found | playing | result
-  const [teamCount, setTeamCount] = useState(1) // found players count simulation
+  const [teamCount, setTeamCount] = useState(1)
+  const [matchMode, setMatchMode] = useState('ai')
   const [questions, setQuestions] = useState([])
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState([])
@@ -175,6 +177,7 @@ export default function GuruhliJangPage() {
   const [teammates, setTeammates] = useState([])
   const [enemies, setEnemies] = useState([])
   const timerRef = useState(null)
+  const foundStartedRef = useRef(false)
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -185,41 +188,100 @@ export default function GuruhliJangPage() {
     }
   }, [])
 
-  // ── Qidiruv boshlash ──
-  const startSearch = () => {
-    setPhase('searching')
-    setTeamCount(1)
-
-    // Progressively show players joining
-    let count = 1
-    const joinInterval = setInterval(() => {
-      count++
-      setTeamCount(count)
-      if (count >= 4) {
-        clearInterval(joinInterval)
-        // Hozircha AI team mode: real multiplayer yo'q.
-        setTeammates([{ name: 'AI Ally' }])
-        setEnemies([{ name: 'AI Enemy 1' }, { name: 'AI Enemy 2' }])
-        setTimeout(() => {
-          setPhase('found')
-          setTimeout(() => startBattle(), 2200)
-        }, 600)
-      }
-    }, 800 + Math.random() * 600)
+  const cancelSearch = async () => {
+    try {
+      await api.delete('/api/pvp/queue')
+    } catch (_) {
+      /* ignore */
+    }
+    setPhase('intro')
   }
 
-  // ── Jang boshlash ──
-  const startBattle = async () => {
+  const startSearch = async () => {
+    setPhase('searching')
+    setTeamCount(1)
+    setMatchMode('ai')
     try {
-      const res = await fetch(`${API_URL}/api/ai-test/session`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      })
-      const data = await res.json()
-      if (data.error || !data.questions) {
-        setPhase('intro')
-        return
+      await api.post('/api/pvp/queue', { mode: 'GROUP' })
+      const deadline = Date.now() + 120_000
+      while (Date.now() < deadline) {
+        const { data } = await api.get('/api/pvp/status')
+        if (data.state === 'recruiting') {
+          setTeamCount(Math.max(1, data.filled || 1))
+        }
+        if (data.state === 'ready') {
+          const members = data.members || []
+          const me = members.find((m) => m.isMe)
+          const myTeam = members.filter((m) => m.team === me?.team)
+          const theirTeam = members.filter((m) => m.team !== me?.team)
+          setTeammates(myTeam.filter((m) => !m.isMe).map((m) => ({ name: m.displayName })))
+          setEnemies(theirTeam.map((m) => ({ name: m.displayName })))
+          setTeamCount(members.length)
+          setMatchMode('human')
+          setPhase('found')
+          return
+        }
+        if (data.state === 'idle') break
+        await new Promise((r) => setTimeout(r, 2000))
       }
-      setQuestions(data.questions)
+      try {
+        await api.delete('/api/pvp/queue')
+      } catch (_) {
+        /* ignore */
+      }
+      setPhase('no_match')
+    } catch (_) {
+      try {
+        await api.delete('/api/pvp/queue')
+      } catch (__) {
+        /* ignore */
+      }
+      setPhase('intro')
+    }
+  }
+
+  useEffect(() => {
+    if (phase !== 'found') {
+      foundStartedRef.current = false
+      return
+    }
+    if (matchMode !== 'human') return
+    if (foundStartedRef.current) return
+    foundStartedRef.current = true
+    const t = setTimeout(async () => {
+      try {
+        await api.post('/api/pvp/ack-ready')
+      } catch (_) {
+        /* ignore */
+      }
+      startBattle('human')
+    }, 1600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, matchMode])
+
+  // ── Jang boshlash ──
+  const startBattle = async (modeArg) => {
+    const mode = modeArg || matchMode
+    try {
+      if (mode === 'human') {
+        const { data } = await api.get('/api/pvp/game')
+        if (data.error || !data.questions) {
+          setPhase('intro')
+          return
+        }
+        setQuestions(data.questions)
+      } else {
+        const res = await fetch(`${API_URL}/api/ai-test/session`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        })
+        const data = await res.json()
+        if (data.error || !data.questions) {
+          setPhase('intro')
+          return
+        }
+        setQuestions(data.questions)
+      }
       setAnswers([])
       setCurrentQ(0)
       setSelected(null)
@@ -268,24 +330,67 @@ export default function GuruhliJangPage() {
   // ── Natija yuborish ──
   const submitBattle = async (finalAnswers, finalScore) => {
     try {
+      if (matchMode === 'human') {
+        const { data: r1 } = await api.post('/api/pvp/submit', { answers: finalAnswers })
+        if (r1.error) {
+          setPhase('intro')
+          return
+        }
+        if (r1.phase === 'waiting') {
+          for (let i = 0; i < 90; i++) {
+            await new Promise((r) => setTimeout(r, 2000))
+            const { data: st } = await api.get('/api/pvp/status')
+            if (st.state === 'done' && st.result) {
+              const raw = st.result
+              const teamByUserId = raw.teamByUserId || {}
+              const teamAvg = raw.teamAvg || { 0: 0, 1: 0 }
+              const myTeam = teamByUserId[user?.id] ?? 0
+              const myTeamScore = myTeam === 0 ? teamAvg[0] : teamAvg[1]
+              const enemyTeamScore = myTeam === 0 ? teamAvg[1] : teamAvg[0]
+              setResult({
+                myScore: raw.myScoreByUserId?.[user?.id] ?? finalScore,
+                totalQuestions: questions.length || 10,
+                myTeamScore,
+                enemyTeamScore,
+                npEarned: raw.npByUserId?.[user?.id] ?? 0,
+              })
+              setPhase('result')
+              return
+            }
+          }
+          setPhase('intro')
+          return
+        }
+        if (r1.phase === 'done') {
+          setResult({
+            myScore: r1.myScore ?? finalScore,
+            totalQuestions: (r1.totalQuestions ?? questions.length) || 10,
+            myTeamScore: r1.myTeamScore,
+            enemyTeamScore: r1.enemyTeamScore,
+            npEarned: r1.npEarned ?? 0,
+          })
+          setPhase('result')
+          return
+        }
+        setPhase('intro')
+        return
+      }
+
       const res = await fetch(`${API_URL}/api/ai-test/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ answers: finalAnswers, mode: 'group' })
+        body: JSON.stringify({ answers: finalAnswers, mode: 'group' }),
       })
       const data = await res.json()
 
-      // Backend natijasiga yaqinlashtirilgan jamoaviy hisob:
-      // - teammate sizning natijangizga proporsional
-      // - enemy taraf AI score asosida quriladi
       const totalQ = questions.length || 10
       const aiScorePercent = data?.aiScore ?? 50
       const enemyExpected = Math.round((aiScorePercent / 100) * totalQ)
 
       const teammateScore = Math.max(1, Math.min(totalQ, Math.round(finalScore * 0.8)))
-      const enemy1Score   = Math.max(1, Math.round(enemyExpected * 0.9))
-      const enemy2Score   = Math.max(1, Math.round(enemyExpected * 1.1))
-      const myTeamScore   = finalScore + teammateScore
+      const enemy1Score = Math.max(1, Math.round(enemyExpected * 0.9))
+      const enemy2Score = Math.max(1, Math.round(enemyExpected * 1.1))
+      const myTeamScore = finalScore + teammateScore
       const enemyTeamScore = enemy1Score + enemy2Score
 
       setResult({
@@ -327,7 +432,8 @@ export default function GuruhliJangPage() {
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 6 }}>2 vs 2 Guruhli Jang</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24, textAlign: 'center', lineHeight: 1.6 }}>
-            AI jamoadosh bilan test rejimida<br />AI jamoaga qarshi jang!
+            4 ta haqiqiy o‘yinchi to‘planmaguncha navbatda turiladi (Telegram orqali chaqiruv).<br />
+            Vaqt tugasa <b>jonli guruh jangi ochilmaydi</b> — xohlasangiz <b>AI mashq</b>ni ochiq yozuvda tanlaysiz (bu jonli jang emas).
           </div>
 
           {/* Info kartalar */}
@@ -382,15 +488,61 @@ export default function GuruhliJangPage() {
       <StarField />
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 16px 12px' }}>
-          <button onClick={() => setPhase('intro')} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <button onClick={cancelSearch} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <ArrowLeft size={18} color="#fff" />
           </button>
           <span style={{ fontWeight: 700, fontSize: 17, color: '#fff' }}>Jamoa qidirilmoqda</span>
         </div>
-        <SearchingScreen onCancel={() => setPhase('intro')} teamCount={teamCount} />
+        <SearchingScreen onCancel={cancelSearch} teamCount={teamCount} />
       </div>
     </div>
   )
+
+  if (phase === 'no_match') {
+    return (
+      <div style={{ position: 'relative', minHeight: '100vh' }}>
+        <StarField />
+        <div style={{ position: 'relative', zIndex: 1, padding: '24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <button onClick={() => setPhase('intro')} type="button" style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ArrowLeft size={18} color="#fff" />
+            </button>
+            <span style={{ fontWeight: 700, fontSize: 17, color: '#fff' }}>Jamoa to‘liq emas</span>
+          </div>
+          <div style={{ textAlign: 'center', padding: '8px 0 24px' }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>👥</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#fff', marginBottom: 10 }}>4 ta jonli o‘yinchi chiqmadi</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.55, marginBottom: 26 }}>
+              Bu <b>soxta guruh emas</b> — haqiqiy 2vs2 uchun to‘rt kishi kerak.<br />
+              Quyida faqat <b>AI mashq</b> (simulyatsiya, ochiq yozuv).
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => { setPhase('searching'); void startSearch() }}
+                style={{ width: '100%', padding: '14px', borderRadius: 16, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}
+              >
+                Qayta qidirish
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMatchMode('ai')
+                  setTeammates([{ name: 'AI · mashq hamkoringiz' }])
+                  setEnemies([{ name: 'AI · raqib 1' }, { name: 'AI · raqib 2' }])
+                  setTeamCount(4)
+                  void startBattle('ai')
+                }}
+                style={{ width: '100%', padding: '14px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                AI bilan guruh mashqi (jonli emas)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // ════════════════════════════════════════
   // FOUND
@@ -423,7 +575,7 @@ export default function GuruhliJangPage() {
         </div>
 
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', animation: 'fadeIn 0.5s 0.3s ease both' }}>
-          Jang boshlanmoqda...
+          {matchMode === 'human' ? 'Jonli guruh jangiga tayyorlanmoqda...' : ''}
         </div>
       </div>
     </div>
@@ -444,10 +596,10 @@ export default function GuruhliJangPage() {
           {/* Scoreboard header */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <PlayerCard player={{ name: user?.firstName ?? 'Siz' }} isMe={true} score={myScore} />
-            <PlayerCard player={teammates[0]} isMe={true} score={Math.floor(Math.random() * myScore + 1)} />
+            <PlayerCard player={teammates[0]} isMe={true} score={0} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>vs</div>
-            <PlayerCard player={enemies[0]} isMe={false} score={Math.floor(Math.random() * myScore + 1)} />
-            <PlayerCard player={enemies[1]} isMe={false} score={Math.floor(Math.random() * myScore + 1)} />
+            <PlayerCard player={enemies[0]} isMe={false} score={0} />
+            <PlayerCard player={enemies[1]} isMe={false} score={0} />
           </div>
 
           {/* Timer + progress */}
