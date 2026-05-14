@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import useStore from '../store/useStore'
 import { api } from '../api/index'
 import {
-  ArrowLeft, Zap, ShoppingBag, Package, Gift, Crown,
-  Star, Flame, BookOpen, MessageCircle, Box, ChevronRight,
-  Sparkles, Lock, Check, X
+  ArrowLeft, Zap, Package, Gift, Crown,
+  Star, Flame, BookOpen, MessageCircle, Box,
+  Sparkles, Lock, Check
 } from 'lucide-react'
 
 const GLOBAL_CSS = `
@@ -21,12 +20,18 @@ const GLOBAL_CSS = `
   @keyframes rotateSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `
 
+const SHOP_STARS = Array.from({ length: 40 }, (_, i) => ({
+  id: i,
+  x: (i * 19.1) % 100,
+  y: (i * 27.3) % 100,
+  size: 0.55 + (i % 5) * 0.35,
+  delay: (i % 9) * 0.35,
+  dur: 2.2 + (i % 4) * 0.45,
+}))
+
 // ── YULDUZLAR ──────────────────────────────────────────────
 function StarField() {
-  const stars = Array.from({ length: 50 }, (_, i) => ({
-    id: i, x: Math.random() * 100, y: Math.random() * 100,
-    size: Math.random() * 2 + 0.5, delay: Math.random() * 5, dur: Math.random() * 3 + 2,
-  }))
+  const stars = SHOP_STARS
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg,#08080f 0%,#0a0c14 45%,#0b0c16 70%,#0a0a0f 100%)' }} />
@@ -93,32 +98,36 @@ function ShopCard({ item, npBalance, onBuy, loading }) {
   const clr = tierColors[item.tier] || '#F5A623'
   const canAfford = npBalance >= (item.npPrice || 0)
   const meta = item.metadata || {}
+  const emoji = meta.emoji || null
+  const isVip = item.type === 'VIP'
+  const isBooster = item.type === 'XP_BOOSTER'
+  const copies = item.ownedCopies ?? 0
 
   return (
     <div style={{
       borderRadius: 20, padding: '18px 16px',
-      background: item.owned ? 'rgba(34,197,94,0.06)' : `rgba(${item.tier === 'PREMIUM' ? '139,92,246' : '245,166,35'},0.05)`,
+      background: item.owned ? 'rgba(34,197,94,0.06)' : `rgba(${item.tier === 'PREMIUM' ? '139,92,246' : item.tier === 'VIP' ? '245,166,35' : '245,166,35'},0.05)`,
       border: item.owned ? '1.5px solid rgba(34,197,94,0.3)' : `1.5px solid ${clr}25`,
       backdropFilter: 'blur(12px)',
       animation: 'fadeIn 0.4s ease both',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* Shimmer */}
-      {!item.owned && (
+      {!item.owned && !isVip && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, width: '35%', height: '100%', background: `linear-gradient(90deg,transparent,${clr}08,transparent)`, animation: 'shimmer 3s ease-in-out infinite' }} />
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-        {/* Icon */}
-        <div style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, background: `${clr}15`, border: `1px solid ${clr}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {typeIcons[item.type] || <Package size={22} color={clr} />}
+        <div style={{ width: 56, height: 56, borderRadius: 16, flexShrink: 0, background: `${clr}18`, border: `1px solid ${clr}35`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+          {emoji && <span style={{ fontSize: 22, lineHeight: 1 }}>{emoji}</span>}
+          <div style={{ opacity: emoji ? 0.85 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {typeIcons[item.type] || <Package size={20} color={clr} />}
+          </div>
         </div>
 
-        {/* Info */}
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{item.name}</span>
             {item.tier !== 'FREE' && (
               <span style={{ fontSize: 9, fontWeight: 700, color: clr, background: `${clr}20`, border: `1px solid ${clr}40`, borderRadius: 20, padding: '2px 7px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -126,20 +135,43 @@ function ShopCard({ item, npBalance, onBuy, loading }) {
               </span>
             )}
           </div>
-          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.45)', lineHeight: 1.4, marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.45)', lineHeight: 1.4, marginBottom: 8 }}>
             {item.description}
           </div>
           {meta.durationMinutes && (
-            <div style={{ fontSize: 10, color: clr, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: clr, marginBottom: 6 }}>
               ⏱ {meta.durationMinutes} daqiqa
             </div>
           )}
+          {meta.topic && (
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>
+              📂 {String(meta.topic)}
+            </div>
+          )}
 
-          {/* Buy button */}
+          {isVip && (
+            <div style={{ marginTop: 4, marginBottom: 8 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#F5A623' }}>
+                {item.realPrice != null ? `$${Number(item.realPrice).toFixed(2)}` : '—'} <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)' }}>{meta.currency || 'USD'}</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>
+                To‘lov integratsiyasi tez orada — @support yoki bot orqali
+              </div>
+            </div>
+          )}
+
+          {isBooster && copies > 0 && (
+            <div style={{ fontSize: 10, color: 'rgba(245,166,35,0.75)', marginBottom: 8 }}>
+              Inventarda aktiv yozuvlar: <b>{copies}</b> (har sotib olish yangi muddat)
+            </div>
+          )}
+
           {item.owned ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#22c55e', fontSize: 12, fontWeight: 700 }}>
               <Check size={14} /> Sizda bor
             </div>
+          ) : isVip ? (
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.25)' }}>NP emas — to‘lov</div>
           ) : item.npPrice ? (
             <button
               onClick={() => onBuy(item)}
@@ -167,7 +199,7 @@ function ShopCard({ item, npBalance, onBuy, loading }) {
 }
 
 // ── MYSTERY BOX SECTION ────────────────────────────────────
-function MysteryBoxSection({ onClaim, onOpen, boxes, loading }) {
+function MysteryBoxSection({ onClaim, onOpen, boxes, loading, onPremiumHint }) {
   const hasUnopenedBox = boxes?.some(b => !b.isOpened)
 
   return (
@@ -195,8 +227,8 @@ function MysteryBoxSection({ onClaim, onOpen, boxes, loading }) {
               <Gift size={16} /> Bepul olish
             </button>
           )}
-          <button style={{ padding: '12px 16px', borderRadius: 14, background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            💎 4,900 so'm
+          <button type="button" onClick={onPremiumHint} style={{ padding: '12px 16px', borderRadius: 14, background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            💎 Pullik (tez orada)
           </button>
         </div>
       </div>
@@ -207,7 +239,6 @@ function MysteryBoxSection({ onClaim, onOpen, boxes, loading }) {
 // ── MAIN PAGE ──────────────────────────────────────────────
 export default function ShopPage() {
   const navigate = useNavigate()
-  const { user } = useStore()
   const [items, setItems] = useState([])
   const [npBalance, setNpBalance] = useState(0)
   const [boxes, setBoxes] = useState([])
@@ -217,40 +248,39 @@ export default function ShopPage() {
   const [activeTab, setActiveTab] = useState('all')
   const [toast, setToast] = useState(null)
 
-  useEffect(() => {
-    const id = 'shop-css'
-    if (!document.getElementById(id)) {
-      const s = document.createElement('style'); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s)
-    }
-    fetchShop()
-  }, [])
-
-  const fetchShop = async () => {
-    try {
-      setLoading(true)
-      const [shopRes] = await Promise.all([
-        api.get('/api/shop'),
-      ])
-      setItems(shopRes.data.items || [])
-      setNpBalance(shopRes.data.npBalance || 0)
-    } catch (err) {
-      showToast('Yuklanmadi', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
+  const loadShop = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true)
+    try {
+      const shopRes = await api.get('/api/shop')
+      setItems(shopRes.data.items || [])
+      setNpBalance(shopRes.data.npBalance || 0)
+      setBoxes(shopRes.data.mysteryBoxes || [])
+    } catch (err) {
+      showToast('Yuklanmadi', 'error')
+    } finally {
+      if (showSpinner) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const id = 'shop-css'
+    if (!document.getElementById(id)) {
+      const s = document.createElement('style'); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s)
+    }
+    loadShop(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleBuy = async (item) => {
     setBuyLoading(true)
     try {
-      const res = await api.post('/api/shop/buy', { itemId: item.id })
-      setNpBalance(res.data.remainingNp)
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, owned: true } : i))
+      await api.post('/api/shop/buy', { itemId: item.id })
+      await loadShop(false)
       showToast(`✅ ${item.name} sotib olindi!`)
     } catch (err) {
       showToast(err.response?.data?.error || 'Xatolik', 'error')
@@ -289,15 +319,19 @@ export default function ShopPage() {
     }
   }
 
+  const catalogItems = useMemo(() => items.filter((i) => i.type !== 'VIP'), [items])
+  const vipItems = useMemo(() => items.filter((i) => i.type === 'VIP'), [items])
+
   const tabs = [
     { key: 'all', label: 'Hammasi' },
     { key: 'XP_BOOSTER', label: '⚡ Booster' },
     { key: 'PROFILE_FRAME', label: '🖼 Frame' },
     { key: 'BADGE', label: '🏅 Badge' },
     { key: 'SMART_BOOK', label: '📚 Kitob' },
+    { key: 'CHAT_ACCESS', label: '💬 Chat' },
   ]
 
-  const filtered = activeTab === 'all' ? items : items.filter(i => i.type === activeTab)
+  const filtered = activeTab === 'all' ? catalogItems : catalogItems.filter((i) => i.type === activeTab)
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: 110, color: '#fff', overflow: 'hidden' }}>
@@ -340,17 +374,24 @@ export default function ShopPage() {
         </div>
 
         {/* MYSTERY BOX */}
-        <MysteryBoxSection onClaim={handleClaimBox} onOpen={handleOpenBox} boxes={boxes} loading={buyLoading} />
+        <MysteryBoxSection
+          onClaim={handleClaimBox}
+          onOpen={handleOpenBox}
+          boxes={boxes}
+          loading={buyLoading}
+          onPremiumHint={() => showToast('Pullik Mystery box tez orada — hozircha oylik bepul box ishlatiladi.', 'error')}
+        />
 
-        {/* VIP BANNER */}
-        <div style={{ margin: '12px 16px', padding: '16px', borderRadius: 20, background: 'linear-gradient(135deg,rgba(245,166,35,0.15),rgba(245,166,35,0.05))', border: '1.5px solid rgba(245,166,35,0.3)', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
-          <div style={{ fontSize: 36 }}>👑</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: '#F5A623' }}>VIP obuna</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 3 }}>AI teacher • Exam mode • Premium chat</div>
+        {vipItems.length > 0 && (
+          <div style={{ margin: '12px 16px 0' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#F5A623', marginBottom: 10, letterSpacing: 0.4 }}>VIP — real narx (NP emas)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {vipItems.map((v) => (
+                <ShopCard key={v.id} item={v} npBalance={npBalance} onBuy={() => {}} loading={buyLoading} />
+              ))}
+            </div>
           </div>
-          <ChevronRight size={18} color="rgba(245,166,35,0.6)" />
-        </div>
+        )}
 
         {/* TABS */}
         <div style={{ padding: '4px 16px 12px', display: 'flex', gap: 8, overflowX: 'auto' }}>
