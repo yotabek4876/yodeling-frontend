@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Languages, Copy, Send, Sparkles, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Languages, Copy, Sparkles, RefreshCw } from 'lucide-react'
+import { api } from '../api/index'
 
 // StarField foni (Dizayn birligi uchun)
 function StarField() {
@@ -17,7 +18,7 @@ function StarField() {
           animation: `twinkle 3s ${Math.random() * 5}s infinite ease-in-out`
         }} />
       ))}
-      <style>{`@keyframes twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.6; } }`}</style>
+      <style>{`@keyframes twinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.6; } } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
@@ -27,17 +28,17 @@ export default function TranslatorPage() {
   const [text, setText] = useState('')
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
+  const [langpair, setLangpair] = useState('en|uz')
 
   const handleTranslate = async () => {
     if (!text.trim()) return
     setLoading(true)
     try {
-      // MyMemory - Tekin va cheksiz API
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|uz`)
-      const data = await res.json()
-      setResult(data.responseData.translatedText)
+      const res = await api.post('/api/translate', { text: text.trim(), langpair })
+      setResult(res.data.translatedText || '')
     } catch (error) {
-      setResult("Kiber-tarmoqda uzilish yuz berdi...")
+      const msg = error?.response?.data?.error || error?.message
+      setResult(msg ? String(msg) : "Kiber-tarmoqda uzilish yuz berdi...")
     } finally {
       setLoading(false)
     }
@@ -71,9 +72,35 @@ export default function TranslatorPage() {
           background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)',
           borderRadius: 24, padding: '20px', backdropFilter: 'blur(15px)', marginBottom: 16
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 11, color: '#F5A623', fontWeight: 700, letterSpacing: 1 }}>ENGLISH SOURCE</span>
-            <Languages size={16} color="#F5A623" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: 11, color: '#F5A623', fontWeight: 700, letterSpacing: 1 }}>
+              {langpair === 'en|uz' ? 'EN → UZ' : 'UZ → EN'}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setLangpair('en|uz')}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 12, cursor: 'pointer', border: 'none',
+                  background: langpair === 'en|uz' ? 'rgba(245,166,35,0.35)' : 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                }}
+              >
+                EN → UZ
+              </button>
+              <button
+                type="button"
+                onClick={() => setLangpair('uz|en')}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 12, cursor: 'pointer', border: 'none',
+                  background: langpair === 'uz|en' ? 'rgba(245,166,35,0.35)' : 'rgba(255,255,255,0.06)',
+                  color: '#fff',
+                }}
+              >
+                UZ → EN
+              </button>
+              <Languages size={16} color="#F5A623" />
+            </div>
           </div>
           <textarea 
             value={text}
@@ -101,7 +128,13 @@ export default function TranslatorPage() {
           onMouseDown={e => e.currentTarget.style.transform = 'scale(0.96)'}
           onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
         >
-          {loading ? <RefreshCw size={20} className="animate-spin" /> : <><Sparkles size={18} /> Tarjima qilish</>}
+          {loading ? (
+            <RefreshCw size={20} style={{ animation: 'spin 0.9s linear infinite' }} />
+          ) : (
+            <>
+              <Sparkles size={18} /> Tarjima qilish
+            </>
+          )}
         </button>
 
         {/* Output Card */}
@@ -113,7 +146,9 @@ export default function TranslatorPage() {
         }}>
           <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: '#F5A623' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 700, letterSpacing: 1 }}>O'ZBEKCHA NATIJA</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 700, letterSpacing: 1 }}>
+              {langpair === 'en|uz' ? "O'ZBEKCHA NATIJA" : 'ENGLISH RESULT'}
+            </span>
             <Copy size={16} color="rgba(255,255,255,0.3)" style={{ cursor: 'pointer' }} onClick={() => {
                 if(result) navigator.clipboard.writeText(result)
             }} />

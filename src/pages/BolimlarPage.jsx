@@ -57,7 +57,7 @@ const BOX_SCHEMA = [
 function SubBox({ b, idx }) {
   const pulse = b.active ? 'pulseSubBoxOrange 3s ease-in-out infinite,' : (idx === 0 ? 'pulseSubBoxGreen 3s ease-in-out infinite,' : '')
   return (
-    <div style={{ width:'100%', height:72, borderRadius:18, padding:'0 18px', display:'flex', alignItems:'center', gap:14, position:'relative', overflow:'visible', background:b.bg, backdropFilter:'blur(14px)', cursor:'pointer', transition:'transform .15s', animation:`${pulse} fadeIn .5s ${idx*.08}s both` }}
+    <div style={{ width:'100%', height:72, borderRadius:18, padding:'0 18px', display:'flex', alignItems:'center', gap:14, position:'relative', overflow:'visible', background:b.bg, cursor:'pointer', transition:'transform .15s', animation:`${pulse} fadeIn .5s ${idx*.08}s both` }}
       onMouseDown={e=>e.currentTarget.style.transform='scale(.98)'} onMouseUp={e=>e.currentTarget.style.transform='scale(1)'}
       onTouchStart={e=>e.currentTarget.style.transform='scale(.98)'} onTouchEnd={e=>e.currentTarget.style.transform='scale(1)'}>
       <ProgressRing pct={b.pct} clr={b.clr} size={34} sw={3}/>
